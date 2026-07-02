@@ -7,8 +7,8 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phases 0–5 complete** — live fleet + scale + stream alerts,
-> now with Prometheus/Grafana observability (throughput, consumer lag, alert counts + a lag alert rule).
+> **Status:** 🚧 Building. **Phases 0–6 complete** — real-time SSE dashboard (live map,
+> battery/speed charts, alerts feed) over the full streaming + observability stack. Only k8s (Phase 7) remains.
 > Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is

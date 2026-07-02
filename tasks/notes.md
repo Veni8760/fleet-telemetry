@@ -71,3 +71,11 @@ Source of truth: `fleet-telemetry-design.md`. This file holds the proof each Gat
   - Load reaction (single ingest): baseline lag **782** → 200k burst → spike **200,228** → steady drain → recovered **~737**.
   - Alert `HighConsumerLag` observed **firing** (value 162254 > 5000) during the spike.
 - measurement gotcha: `rate(counter[1m])` is garbage across process restarts (counter resets); use absolute-value deltas over a timed window. Also cleared junk 2M-row telemetry backlog (`TRUNCATE`) + recreated the topic for a clean baseline; `synchronous_commit=off` set on the dev DB.
+- **BIG gotcha (root cause of most Phase 5 confusion):** a Phase 2 `go run ./simulator` (FLEET_SIZE=1000) survived every `pkill` because its exe lives at a `go-build/...` path, not `exe/simulator`. It kept producing 1000 msg/s for hours, inflating lag/throughput/car-counts. Kill strays with `pkill -f "go run ./simulator"` AND `pkill -f "go-build.*/simulator"`.
+
+## Phase 6 — Live Dashboard Polish ✅
+- query-api: `GET /api/stream` SSE endpoint pushes `{cars, alerts}` every 1s (text/event-stream, flush per frame).
+- dashboard: replaced polling with `EventSource(/api/stream)`; markers updated imperatively from pushes; added shadcn **chart** (Recharts) — battery% and speed histograms computed from the live snapshot.
+- **Gate — real-time push (no polling) + charts reflect live state:**
+  - Playwright @ :3001: 200 markers, **165 moved in 4s**, badge=200; **0** requests to `/api/positions`/`/api/alerts` (polling gone); 26 chart bars rendered.
+  - Server confirms: `queryapi_requests_total{endpoint="stream"}=1` (browser SSE connection), `positions`=none. Screenshot: `tasks/phase6-sse-charts.png`.

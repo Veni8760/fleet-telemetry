@@ -193,8 +193,8 @@ checkboxes below.
 - **Learn:** the metrics→dashboard→alert loop; what to actually measure in a pipeline.
 
 ### Phase 6 — Live Dashboard Polish
-- [ ] replace polling with **SSE** for real-time map updates.
-- [ ] charts: battery distribution, fleet speed histogram, alerts feed.
+- [x] replace polling with **SSE** for real-time map updates.
+- [x] charts: battery distribution, fleet speed histogram, alerts feed.
 - **Gate:** map updates push in real time without polling; charts reflect live fleet state.
 - **Learn:** server-push transports; building a real-time frontend over a stream.
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
@@ -226,6 +227,20 @@ type alertJSON struct {
 	Value   float64 `json:"value"`
 }
 
+func toAlerts(als []*telemetrypb.Alert) []alertJSON {
+	out := make([]alertJSON, len(als))
+	for i, a := range als {
+		out[i] = alertJSON{a.CarId, a.Ts, a.Type, a.Message, a.Value}
+	}
+	return out
+}
+
+// streamPayload is one SSE frame: current fleet snapshot + recent alerts.
+type streamPayload struct {
+	Cars   []carJSON   `json:"cars"`
+	Alerts []alertJSON `json:"alerts"`
+}
+
 func toJSON(cars []*telemetrypb.Telemetry) []carJSON {
 	out := make([]carJSON, len(cars))
 	for i, c := range cars {
@@ -259,12 +274,38 @@ func (s *server) serveHTTP(addr string) {
 		metricRequests.WithLabelValues("alerts").Inc()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
-		als := s.alerts.list()
-		out := make([]alertJSON, len(als))
-		for i, a := range als {
-			out[i] = alertJSON{a.CarId, a.Ts, a.Type, a.Message, a.Value}
+		json.NewEncoder(w).Encode(toAlerts(s.alerts.list()))
+	})
+
+	// SSE: push fleet snapshot + alerts every second (replaces client polling).
+	mux.HandleFunc("/api/stream", func(w http.ResponseWriter, r *http.Request) {
+		metricRequests.WithLabelValues("stream").Inc()
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
 		}
-		json.NewEncoder(w).Encode(out)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		enc := json.NewEncoder(w)
+		for {
+			cars, err := s.snapshot(r.Context())
+			if err == nil {
+				w.Write([]byte("data: "))
+				enc.Encode(streamPayload{Cars: toJSON(cars), Alerts: toAlerts(s.alerts.list())})
+				w.Write([]byte("\n"))
+				flusher.Flush()
+			}
+			select {
+			case <-r.Context().Done():
+				return
+			case <-ticker.C:
+			}
+		}
 	})
 
 	mux.HandleFunc("/api/geo", func(w http.ResponseWriter, r *http.Request) {
