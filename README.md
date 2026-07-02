@@ -7,8 +7,8 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phases 0–4 complete** — live fleet + scale story +
-> stream-processing anomaly alerts (overheat / low-battery / fault-code) surfaced live on the map.
+> **Status:** 🚧 Building. **Phases 0–5 complete** — live fleet + scale + stream alerts,
+> now with Prometheus/Grafana observability (throughput, consumer lag, alert counts + a lag alert rule).
 > Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is
@@ -41,8 +41,12 @@ Full diagram, data shapes, and the rationale behind every choice: [design doc](.
 | Storage | **PostgreSQL** (history) + **Redis** (hot state) |
 | API | **gRPC + REST + SSE** |
 | Frontend | **Next.js / TypeScript** (live map + charts) |
-| Observability | **Prometheus + Grafana** |
+| Observability | **Prometheus + Grafana** (+ kafka-exporter for consumer lag) |
 | Infra | **Docker Compose** (dev) → **Kubernetes / kind** (deploy) |
+
+Observability (Phase 5): Prometheus at `localhost:9091`, Grafana at `localhost:3002`
+(anonymous, dashboard "Fleet Telemetry Pipeline"). Go services expose `/metrics`
+(ingest `:2112`, simulator `:8090`, query-api `:8082`).
 
 ## Roadmap (epics)
 

@@ -12,15 +12,36 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/parquet-go/parquet-go"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
+	"net/http"
 )
+
+var (
+	metricMessages = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "ingest_messages_total", Help: "Telemetry messages consumed.",
+	})
+	metricAlerts = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "ingest_alerts_total", Help: "Alerts emitted by type.",
+	}, []string{"type"})
+)
+
+func serveMetrics(addr string) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	log.Printf("metrics on %s/metrics", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
 
 // Anomaly thresholds (tune via the physical world; normal motor_temp tops out ~68°C).
 const (
@@ -76,6 +97,7 @@ func (d *detector) fire(ctx context.Context, st *carState, t *telemetrypb.Teleme
 		log.Printf("alert write %s: %v", t.CarId, err)
 		return
 	}
+	metricAlerts.WithLabelValues(typ).Inc()
 	log.Printf("ALERT %-11s %s: %s", typ, t.CarId, msg)
 }
 
@@ -191,9 +213,12 @@ func main() {
 
 	// Anomaly detector -> alerts topic.
 	ensureTopic(broker, "alerts", 3)
-	alertW := &kafka.Writer{Addr: kafka.TCP(broker), Topic: "alerts", Balancer: &kafka.Hash{}}
+	// Async so an alert write never blocks the consume loop.
+	alertW := &kafka.Writer{Addr: kafka.TCP(broker), Topic: "alerts", Balancer: &kafka.Hash{}, Async: true}
 	defer alertW.Close()
 	det := &detector{w: alertW, state: map[string]*carState{}}
+
+	go serveMetrics(getenv("METRICS_ADDR", ":2112"))
 
 	// Cold analytics sink (Parquet). Disabled unless PARQUET_DIR is set.
 	pqRows, _ := strconv.Atoi(getenv("PARQUET_FLUSH_ROWS", "20000"))
@@ -207,10 +232,11 @@ func main() {
 
 	group := getenv("CONSUMER_GROUP", "ingest")
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:     []string{broker},
-		Topic:       "telemetry",
-		GroupID:     group,
-		StartOffset: kafka.LastOffset, // fresh group starts at the tail (live); history is in Postgres/Parquet
+		Brokers:        []string{broker},
+		Topic:          "telemetry",
+		GroupID:        group,
+		StartOffset:    kafka.LastOffset, // fresh group starts at the tail (live); history is in Postgres/Parquet
+		CommitInterval: time.Second,      // batch offset commits instead of one round-trip per message
 	})
 	defer r.Close()
 
@@ -225,6 +251,7 @@ func main() {
 			log.Printf("bad message partition=%d offset=%d: %v", m.Partition, m.Offset, err)
 			continue
 		}
+		metricMessages.Inc()
 		if _, err := pool.Exec(ctx, insertSQL,
 			t.CarId, t.Ts, t.Lat, t.Lng, t.Speed, t.Heading,
 			t.BatteryPct, t.MotorTemp, t.Odometer, t.Gear, t.FaultCodes); err != nil {

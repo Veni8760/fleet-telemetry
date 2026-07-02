@@ -15,6 +15,9 @@ import (
 	telemetrypb "fleet-telemetry/proto/gen"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/grpc"
@@ -22,6 +25,10 @@ import (
 )
 
 const hotKey = "fleet:latest"
+
+var metricRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "queryapi_requests_total", Help: "REST requests by endpoint.",
+}, []string{"endpoint"})
 
 type server struct {
 	telemetrypb.UnimplementedFleetServiceServer
@@ -230,13 +237,16 @@ func toJSON(cars []*telemetrypb.Telemetry) []carJSON {
 func (s *server) serveHTTP(addr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok")) })
+	mux.Handle("/metrics", promhttp.Handler())
 
 	mux.HandleFunc("/api/positions", func(w http.ResponseWriter, r *http.Request) {
+		metricRequests.WithLabelValues("positions").Inc()
 		cars, err := s.snapshot(r.Context())
 		writeCars(w, cars, err)
 	})
 
 	mux.HandleFunc("/api/query", func(w http.ResponseWriter, r *http.Request) {
+		metricRequests.WithLabelValues("query").Inc()
 		cars, err := s.snapshot(r.Context())
 		if err != nil {
 			writeCars(w, nil, err)
@@ -246,6 +256,7 @@ func (s *server) serveHTTP(addr string) {
 	})
 
 	mux.HandleFunc("/api/alerts", func(w http.ResponseWriter, _ *http.Request) {
+		metricRequests.WithLabelValues("alerts").Inc()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 		als := s.alerts.list()
@@ -257,6 +268,7 @@ func (s *server) serveHTTP(addr string) {
 	})
 
 	mux.HandleFunc("/api/geo", func(w http.ResponseWriter, r *http.Request) {
+		metricRequests.WithLabelValues("geo").Inc()
 		cars, err := s.geo(r.Context(), qf(r, "min_lat"), qf(r, "min_lng"), qf(r, "max_lat"), qf(r, "max_lng"))
 		writeCars(w, cars, err)
 	})

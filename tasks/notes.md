@@ -60,3 +60,14 @@ Source of truth: `fleet-telemetry-design.md`. This file holds the proof each Gat
 - **Gate — inject fault → alert live on dashboard:**
   - `POST :8090/inject?car=car-3` → within ~1s `/api/alerts` shows `{car-3, OVERHEAT, "motor temp 130°C", 130}`.
   - Playwright @ :3001: alerts panel lists `car-3 OVERHEAT` + `car-3 FAULT_CODE`, count badge = 28.
+
+## Phase 5 — Observability ✅
+- Prometheus `/metrics` on every Go service: ingest (`:2112` — `ingest_messages_total`, `ingest_alerts_total{type}`), simulator (`:8090` — `simulator_messages_total`), query-api (`:8082` — `queryapi_requests_total{endpoint}`).
+- compose: `kafka-exporter` (consumer lag), `prometheus` (:9091, `extra_hosts host-gateway` to scrape host Go services), `grafana` (:3002, anonymous admin, provisioned datasource + dashboard). Configs in `deploy/`.
+- Prometheus alert rule `HighConsumerLag` (`sum(kafka_consumergroup_lag{topic="telemetry"}) > 5000 for 15s`).
+- ingest throughput fixes: `CommitInterval=1s` (batch offset commits) + alerts writer `Async:true` (don't block consume loop).
+- **Gate — Grafana shows live metrics; lag reacts to load:**
+  - All 4 scrape targets UP; data flows Grafana→Prometheus proxy (throughput 50/s, lag, alerts by type). Dashboard renders 4 panels. Screenshot: `tasks/phase5-grafana.png`.
+  - Load reaction (single ingest): baseline lag **782** → 200k burst → spike **200,228** → steady drain → recovered **~737**.
+  - Alert `HighConsumerLag` observed **firing** (value 162254 > 5000) during the spike.
+- measurement gotcha: `rate(counter[1m])` is garbage across process restarts (counter resets); use absolute-value deltas over a timed window. Also cleared junk 2M-row telemetry backlog (`TRUNCATE`) + recreated the topic for a clean baseline; `synchronous_commit=off` set on the dev DB.

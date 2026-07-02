@@ -187,8 +187,8 @@ checkboxes below.
 - **Learn:** stateful stream processing, windowing/aggregation, event-driven alerts.
 
 ### Phase 5 — Observability
-- [ ] Prometheus `/metrics` on every Go service; Grafana dashboards (throughput, consumer lag, alert counts).
-- [ ] one basic alerting rule (e.g. consumer lag too high).
+- [x] Prometheus `/metrics` on every Go service; Grafana dashboards (throughput, consumer lag, alert counts).
+- [x] one basic alerting rule (e.g. consumer lag too high).
 - **Gate:** Grafana shows live pipeline metrics; consumer lag is visible and reacts to load.
 - **Learn:** the metrics→dashboard→alert loop; what to actually measure in a pipeline.
 

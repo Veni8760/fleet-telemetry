@@ -1,0 +1,11 @@
+groups:
+  - name: fleet
+    rules:
+      - alert: HighConsumerLag
+        expr: sum(kafka_consumergroup_lag{topic="telemetry"}) > 5000
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Telemetry consumer lag is high"
+          description: "consumer lag on topic=telemetry exceeded 5000 for 15s"

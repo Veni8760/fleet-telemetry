@@ -16,6 +16,9 @@ import (
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
@@ -23,9 +26,14 @@ import (
 // faulty holds car_ids currently injected with an overheat fault (car_id -> true).
 var faulty sync.Map
 
+var metricProduced = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "simulator_messages_total", Help: "Telemetry messages produced.",
+})
+
 // serveControl exposes fault injection for the demo:
-//   curl -X POST 'localhost:8090/inject?car=car-3'   -> car-3 starts emitting OVERHEAT
-//   curl -X POST 'localhost:8090/clear?car=car-3'    -> back to normal
+//
+//	curl -X POST 'localhost:8090/inject?car=car-3'   -> car-3 starts emitting OVERHEAT
+//	curl -X POST 'localhost:8090/clear?car=car-3'    -> back to normal
 func serveControl(addr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/inject", func(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +46,8 @@ func serveControl(addr string) {
 		faulty.Delete(r.URL.Query().Get("car"))
 		w.Write([]byte("cleared"))
 	})
-	log.Printf("simulator: fault-injection control on %s", addr)
+	mux.Handle("/metrics", promhttp.Handler())
+	log.Printf("simulator: fault-injection control + metrics on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
@@ -107,7 +116,9 @@ func runCar(w *kafka.Writer, n int, rateHz float64) {
 		}
 		if err := w.WriteMessages(context.Background(), kafka.Message{Key: []byte(c.id), Value: b}); err != nil {
 			log.Printf("write %s: %v", c.id, err)
+			continue
 		}
+		metricProduced.Inc()
 	}
 }
 
