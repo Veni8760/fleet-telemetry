@@ -33,3 +33,6 @@ pnpm-debug.log*
 
 # Playwright MCP scratch
 .playwright-mcp/
+
+# Parquet cold-analytics output
+/data/

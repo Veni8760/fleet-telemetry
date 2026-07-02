@@ -36,3 +36,16 @@ Source of truth: `fleet-telemetry-design.md`. This file holds the proof each Gat
   - Geo bbox (central SF) → PostGIS 417 == snapshot-bbox 417, all inside box.
   - gRPC (`tools/grpcprobe`): Snapshot=1000, Query(60)=31, GeoQuery=417 — identical to REST.
   - Dashboard: 1000 Leaflet markers, badge `1000`, 802 moved over 3.5s. Screenshot: `tasks/phase2-1k-fleet.png` (Playwright out dir).
+
+## Phase 3 — Scale & Analytics ✅
+- `loadgen`: batched burst producer (CARS/COUNT/WORKERS), ~300–450k msg/s to `telemetry` across 10k car_ids.
+- ingest: added Parquet sink (`parquet-go`), env `PARQUET_DIR`/`PARQUET_FLUSH_ROWS`, flush per N rows to `telemetry-<pid>-<seq>.parquet`.
+- `analytics`: embedded **DuckDB** (`go-duckdb/v2`, CGo) over `read_parquet('data/parquet/*.parquet')`.
+- **Gate A — lag spikes under 10k load, recovers as replicas share partitions** (`kafka-consumer-groups --describe`):
+  - loadgen burst, 0 consumers → **total lag 462,136** across 6 partitions.
+  - 1 replica → owns all 6 partitions.
+  - 4 replicas (one group) → partitions rebalanced across members; lag drained **462k → 341k → 247k → 63k → 794** (recovered).
+  - Gotcha: killed `go run` replicas ghost the group until session timeout; `docker compose restart kafka` clears stale members. Prebuilt binary + background task keeps a replica alive reliably.
+- **Gate B — DuckDB aggregates over historical Parquet:**
+  - 12 parquet files → `rows=120000 cars=9941`, speed avg=40.5/max=80.0, battery avg=49.7/min=0.0, plus top-5 by avg speed.
+  - Verified no sink loss: controlled 50k burst with a single live consumer → exactly 5 files (10k/file).

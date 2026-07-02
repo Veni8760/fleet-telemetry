@@ -7,8 +7,8 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phases 0–2 complete** — 1,000-car live fleet with a
-> gRPC+REST query-api (Redis hot state, PostGIS geo queries) behind the Next.js map.
+> **Status:** 🚧 Building. **Phases 0–3 complete** — 1,000-car live fleet + scale story:
+> multi-replica consumer group, 10k-car loadgen, and DuckDB/Parquet cold analytics.
 > Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is
@@ -76,6 +76,17 @@ cd dashboard && npm install && npm run dev   # http://localhost:3001
 
 Query examples: `:8082/api/positions` · `:8082/api/query?min_speed=60&max_battery=15` ·
 `:8082/api/geo?min_lat=37.75&min_lng=-122.45&max_lat=37.80&max_lng=-122.40`.
+
+Scale & analytics (Phase 3):
+
+```bash
+# Run several consumers in one group (watch partitions rebalance):
+for i in 1 2 3 4; do PARQUET_DIR=data/parquet go run ./ingest & done
+CARS=10000 COUNT=300000 go run ./loadgen           # stress the group -> lag spikes, then recovers
+docker exec fleet-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 --describe --group ingest   # inspect lag/assignment
+go run ./analytics                                 # embedded DuckDB rollups over Parquet
+```
 
 Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is committed).
 Host ports avoid a native Postgres (5432) and another local project (8080/3000); all are env-overridable.

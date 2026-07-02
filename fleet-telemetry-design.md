@@ -174,9 +174,9 @@ checkboxes below.
 - **Learn:** gRPC vs REST tradeoffs; hot vs cold state; geospatial querying; Kafka partitioning under load.
 
 ### Phase 3 — Scale & Analytics
-- [ ] run 3–4 `ingest-consumer` replicas in one Kafka consumer group; observe partition rebalancing.
-- [ ] Go load-test harness (`loadgen`) that drives the fleet to ~10k cars.
-- [ ] ingest also writes telemetry to Parquet; a Go `analytics` job queries it with embedded **DuckDB** for fleet-wide rollups (no server, no cluster).
+- [x] run 3–4 `ingest-consumer` replicas in one Kafka consumer group; observe partition rebalancing.
+- [x] Go load-test harness (`loadgen`) that drives the fleet to ~10k cars.
+- [x] ingest also writes telemetry to Parquet; a Go `analytics` job queries it with embedded **DuckDB** for fleet-wide rollups (no server, no cluster).
 - **Gate:** consumer lag (via `kafka-consumer-groups` describe / logs) spikes under 10k-car load and recovers as replicas share partitions; a DuckDB batch query returns fleet-wide aggregates over historical Parquet. (Grafana visualizes the lag later in Phase 5.)
 - **Learn:** consumer groups, partition rebalancing, backpressure/lag; batch (cold) vs stream (hot) analytics; large-scale columnar processing without a cluster.
 

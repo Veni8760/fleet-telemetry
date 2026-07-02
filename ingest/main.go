@@ -5,16 +5,68 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strconv"
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/parquet-go/parquet-go"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
+
+// parquetRow mirrors the telemetry columns for cold analytics (read by the DuckDB job).
+type parquetRow struct {
+	CarID      string  `parquet:"car_id"`
+	Ts         int64   `parquet:"ts"`
+	Lat        float64 `parquet:"lat"`
+	Lng        float64 `parquet:"lng"`
+	Speed      float64 `parquet:"speed"`
+	Heading    float64 `parquet:"heading"`
+	BatteryPct float64 `parquet:"battery_pct"`
+	MotorTemp  float64 `parquet:"motor_temp"`
+	Odometer   float64 `parquet:"odometer"`
+	Gear       string  `parquet:"gear"`
+}
+
+// parquetSink buffers rows and flushes a file every flushRows rows. Disabled if dir == "".
+type parquetSink struct {
+	dir       string
+	flushRows int
+	buf       []parquetRow
+	seq       int
+}
+
+func (p *parquetSink) add(t *telemetrypb.Telemetry) {
+	if p.dir == "" {
+		return
+	}
+	p.buf = append(p.buf, parquetRow{
+		t.CarId, t.Ts, t.Lat, t.Lng, t.Speed, t.Heading, t.BatteryPct, t.MotorTemp, t.Odometer, t.Gear,
+	})
+	if len(p.buf) >= p.flushRows {
+		p.flush()
+	}
+}
+
+func (p *parquetSink) flush() {
+	if len(p.buf) == 0 {
+		return
+	}
+	path := filepath.Join(p.dir, fmt.Sprintf("telemetry-%d-%04d.parquet", os.Getpid(), p.seq))
+	if err := parquet.WriteFile(path, p.buf); err != nil {
+		log.Printf("parquet write %s: %v", path, err)
+		return
+	}
+	log.Printf("parquet: wrote %d rows -> %s", len(p.buf), path)
+	p.buf = p.buf[:0]
+	p.seq++
+}
 
 const schema = `
 CREATE TABLE IF NOT EXISTS telemetry (
@@ -60,6 +112,16 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
 	defer rdb.Close()
 
+	// Cold analytics sink (Parquet). Disabled unless PARQUET_DIR is set.
+	pqRows, _ := strconv.Atoi(getenv("PARQUET_FLUSH_ROWS", "20000"))
+	pq := &parquetSink{dir: os.Getenv("PARQUET_DIR"), flushRows: pqRows}
+	if pq.dir != "" {
+		if err := os.MkdirAll(pq.dir, 0o755); err != nil {
+			log.Fatalf("parquet dir: %v", err)
+		}
+		log.Printf("ingest: parquet sink -> %s (flush every %d rows)", pq.dir, pq.flushRows)
+	}
+
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{broker},
 		Topic:   "telemetry",
@@ -87,6 +149,8 @@ func main() {
 		if err := rdb.HSet(ctx, hotKey, t.CarId, m.Value).Err(); err != nil {
 			log.Printf("redis hset %s: %v", t.CarId, err)
 		}
+		// Cold path: buffer for Parquet.
+		pq.add(&t)
 	}
 }
 
