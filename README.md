@@ -7,7 +7,8 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phase 0 (Foundations) complete** — Kafka round-trip proven.
+> **Status:** 🚧 Building. **Phases 0–1 complete** — live fleet map over the full
+> simulator → Kafka → Postgres → Next.js loop.
 > Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is
@@ -61,15 +62,19 @@ Full diagram, data shapes, and the rationale behind every choice: [design doc](.
 ## Quickstart
 
 ```bash
-# 1. Bring up infra (Kafka + Postgres + Redis)
+# 1. Bring up infra (Kafka :9092 · Postgres :5433 · Redis :6380)
 docker compose up -d
 
-# 2. Round-trip a telemetry message through Kafka (Phase 0 gate)
-go run ./simulator     # produces one Telemetry protobuf message
-go run ./ingest        # consumes and prints it (Ctrl-C to stop)
+# 2. Start the pipeline (each in its own terminal)
+go run ./ingest        # consume telemetry -> Postgres; serves /api/positions on :8081
+go run ./simulator     # FLEET_SIZE=10 cars random-walking -> Kafka (env: FLEET_SIZE, EMIT_RATE_HZ)
+
+# 3. Live map
+cd dashboard && npm install && npm run dev   # http://localhost:3001
 ```
 
-Requires Go 1.26+, Docker, and `protoc` only if regenerating `/proto` (generated Go is committed).
+Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is committed).
+Host ports avoid a native Postgres (5432) and another local project (8080/3000); all are env-overridable.
 
 ## How it's built
 

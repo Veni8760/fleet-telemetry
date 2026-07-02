@@ -30,3 +30,6 @@ pnpm-debug.log*
 
 # Logs
 *.log
+
+# Playwright MCP scratch
+.playwright-mcp/

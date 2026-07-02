@@ -158,10 +158,10 @@ checkboxes below.
 - **Learn:** Kafka producer/consumer basics; Protobuf schema; Compose wiring.
 
 ### Phase 1 — MVP Spine
-- [ ] simulator: 10 cars, Tier-1 random-walk movement → `telemetry` topic (Protobuf).
-- [ ] ingest-consumer: consume → write Postgres; dedupe writes on `(car_id, ts)` (idempotent).
-- [ ] minimal HTTP endpoint (on ingest-consumer for now) serving latest positions from Postgres.
-- [ ] minimal Next.js map that polls that endpoint and renders live car positions.
+- [x] simulator: 10 cars, Tier-1 random-walk movement → `telemetry` topic (Protobuf).
+- [x] ingest-consumer: consume → write Postgres; dedupe writes on `(car_id, ts)` (idempotent).
+- [x] minimal HTTP endpoint (on ingest-consumer for now) serving latest positions from Postgres.
+- [x] minimal Next.js map that polls that endpoint and renders live car positions.
 - **Gate:** cars visibly move on a map in the browser; data is persisted in Postgres.
 - **Learn:** the full producer→broker→consumer→store→UI loop; why streaming exists.
 
