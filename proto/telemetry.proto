@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package telemetry;
+
+option go_package = "fleet-telemetry/proto/gen;telemetrypb";
+
+// Telemetry is the single event shape used on Kafka and (later) the gRPC contract.
+message Telemetry {
+  string car_id = 1;
+  int64 ts = 2;            // unix milliseconds
+  double lat = 3;
+  double lng = 4;
+  double speed = 5;        // mph
+  double heading = 6;      // degrees, 0-360
+  double battery_pct = 7;  // 0-100
+  double motor_temp = 8;   // celsius
+  double odometer = 9;     // miles
+  string gear = 10;        // P/R/N/D
+  repeated string fault_codes = 11;
+}
