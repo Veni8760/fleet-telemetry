@@ -7,9 +7,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
@@ -19,6 +21,81 @@ import (
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
+
+// Anomaly thresholds (tune via the physical world; normal motor_temp tops out ~68°C).
+const (
+	overheatTemp     = 120.0 // °C
+	lowBatteryPct    = 15.0  // %
+	lowBatteryStreak = 5     // consecutive readings below threshold
+	alertCooldownMs  = 15000 // per (car, type), avoid alert spam
+)
+
+// detector holds rolling per-car state and emits Alerts to the alerts topic.
+type detector struct {
+	w     *kafka.Writer
+	state map[string]*carState
+}
+
+type carState struct {
+	lowBattStreak int
+	lastAlert     map[string]int64 // alert type -> last emit ts (ms)
+}
+
+func (d *detector) eval(ctx context.Context, t *telemetrypb.Telemetry) {
+	st := d.state[t.CarId]
+	if st == nil {
+		st = &carState{lastAlert: map[string]int64{}}
+		d.state[t.CarId] = st
+	}
+	if t.MotorTemp > overheatTemp {
+		d.fire(ctx, st, t, "OVERHEAT", fmt.Sprintf("motor temp %.0f°C", t.MotorTemp), t.MotorTemp)
+	}
+	if t.BatteryPct < lowBatteryPct {
+		st.lowBattStreak++
+	} else {
+		st.lowBattStreak = 0
+	}
+	if st.lowBattStreak >= lowBatteryStreak {
+		d.fire(ctx, st, t, "LOW_BATTERY", fmt.Sprintf("battery %.0f%% for %d readings", t.BatteryPct, st.lowBattStreak), t.BatteryPct)
+	}
+	if len(t.FaultCodes) > 0 {
+		d.fire(ctx, st, t, "FAULT_CODE", strings.Join(t.FaultCodes, ","), 0)
+	}
+}
+
+func (d *detector) fire(ctx context.Context, st *carState, t *telemetrypb.Telemetry, typ, msg string, val float64) {
+	if t.Ts-st.lastAlert[typ] < alertCooldownMs {
+		return // cooldown
+	}
+	st.lastAlert[typ] = t.Ts
+	b, err := proto.Marshal(&telemetrypb.Alert{CarId: t.CarId, Ts: t.Ts, Type: typ, Message: msg, Value: val})
+	if err != nil {
+		return
+	}
+	if err := d.w.WriteMessages(ctx, kafka.Message{Key: []byte(t.CarId), Value: b}); err != nil {
+		log.Printf("alert write %s: %v", t.CarId, err)
+		return
+	}
+	log.Printf("ALERT %-11s %s: %s", typ, t.CarId, msg)
+}
+
+func ensureTopic(broker, topic string, partitions int) {
+	conn, err := kafka.Dial("tcp", broker)
+	if err != nil {
+		log.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	controller, err := conn.Controller()
+	if err != nil {
+		log.Fatalf("controller: %v", err)
+	}
+	cc, err := kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
+	if err != nil {
+		log.Fatalf("dial controller: %v", err)
+	}
+	defer cc.Close()
+	_ = cc.CreateTopics(kafka.TopicConfig{Topic: topic, NumPartitions: partitions, ReplicationFactor: 1})
+}
 
 // parquetRow mirrors the telemetry columns for cold analytics (read by the DuckDB job).
 type parquetRow struct {
@@ -112,6 +189,12 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
 	defer rdb.Close()
 
+	// Anomaly detector -> alerts topic.
+	ensureTopic(broker, "alerts", 3)
+	alertW := &kafka.Writer{Addr: kafka.TCP(broker), Topic: "alerts", Balancer: &kafka.Hash{}}
+	defer alertW.Close()
+	det := &detector{w: alertW, state: map[string]*carState{}}
+
 	// Cold analytics sink (Parquet). Disabled unless PARQUET_DIR is set.
 	pqRows, _ := strconv.Atoi(getenv("PARQUET_FLUSH_ROWS", "20000"))
 	pq := &parquetSink{dir: os.Getenv("PARQUET_DIR"), flushRows: pqRows}
@@ -122,14 +205,16 @@ func main() {
 		log.Printf("ingest: parquet sink -> %s (flush every %d rows)", pq.dir, pq.flushRows)
 	}
 
+	group := getenv("CONSUMER_GROUP", "ingest")
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{broker},
-		Topic:   "telemetry",
-		GroupID: "ingest",
+		Brokers:     []string{broker},
+		Topic:       "telemetry",
+		GroupID:     group,
+		StartOffset: kafka.LastOffset, // fresh group starts at the tail (live); history is in Postgres/Parquet
 	})
 	defer r.Close()
 
-	log.Printf("ingest: consuming topic=telemetry group=ingest broker=%s pg=ok redis=%s", broker, redisAddr)
+	log.Printf("ingest: consuming topic=telemetry group=%s broker=%s pg=ok redis=%s", group, broker, redisAddr)
 	for {
 		m, err := r.ReadMessage(ctx)
 		if err != nil {
@@ -151,6 +236,8 @@ func main() {
 		}
 		// Cold path: buffer for Parquet.
 		pq.add(&t)
+		// Stream processing: rolling anomaly rules -> alerts topic.
+		det.eval(ctx, &t)
 	}
 }
 

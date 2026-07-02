@@ -181,8 +181,8 @@ checkboxes below.
 - **Learn:** consumer groups, partition rebalancing, backpressure/lag; batch (cold) vs stream (hot) analytics; large-scale columnar processing without a cluster.
 
 ### Phase 4 — Stream Processing & Alerts
-- [ ] rolling aggregates + anomaly rules (Go) in the consumer (e.g. overheating, sustained low battery).
-- [ ] emit to `alerts` topic; dashboard surfaces live alerts.
+- [x] rolling aggregates + anomaly rules (Go) in the consumer (e.g. overheating, sustained low battery).
+- [x] emit to `alerts` topic; dashboard surfaces live alerts.
 - **Gate:** inject a fault in the simulator → alert appears live on the dashboard.
 - **Learn:** stateful stream processing, windowing/aggregation, event-driven alerts.
 

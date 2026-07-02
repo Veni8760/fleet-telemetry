@@ -7,8 +7,8 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phases 0–3 complete** — 1,000-car live fleet + scale story:
-> multi-replica consumer group, 10k-car loadgen, and DuckDB/Parquet cold analytics.
+> **Status:** 🚧 Building. **Phases 0–4 complete** — live fleet + scale story +
+> stream-processing anomaly alerts (overheat / low-battery / fault-code) surfaced live on the map.
 > Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is
@@ -86,6 +86,14 @@ CARS=10000 COUNT=300000 go run ./loadgen           # stress the group -> lag spi
 docker exec fleet-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
   --bootstrap-server localhost:9092 --describe --group ingest   # inspect lag/assignment
 go run ./analytics                                 # embedded DuckDB rollups over Parquet
+```
+
+Live alerts (Phase 4): with `ingest`, `query-api`, `simulator`, and the dashboard running,
+inject a fault and watch it appear on the map's alerts panel:
+
+```bash
+curl -X POST 'localhost:8090/inject?car=car-3'     # car-3 overheats -> OVERHEAT alert live
+curl -X POST 'localhost:8090/clear?car=car-3'      # back to normal
 ```
 
 Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is committed).

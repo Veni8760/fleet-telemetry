@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -23,8 +25,56 @@ const hotKey = "fleet:latest"
 
 type server struct {
 	telemetrypb.UnimplementedFleetServiceServer
-	rdb  *redis.Client
-	pool *pgxpool.Pool
+	rdb    *redis.Client
+	pool   *pgxpool.Pool
+	alerts *alertStore
+}
+
+// alertStore keeps the most recent alerts in memory (newest first) for the dashboard feed.
+type alertStore struct {
+	mu  sync.Mutex
+	buf []*telemetrypb.Alert
+	max int
+}
+
+func (a *alertStore) add(al *telemetrypb.Alert) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.buf = append([]*telemetrypb.Alert{al}, a.buf...)
+	if len(a.buf) > a.max {
+		a.buf = a.buf[:a.max]
+	}
+}
+
+func (a *alertStore) list() []*telemetrypb.Alert {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]*telemetrypb.Alert, len(a.buf))
+	copy(out, a.buf)
+	return out
+}
+
+// consumeAlerts streams the alerts topic into the store (only new alerts on a fresh group).
+func consumeAlerts(broker string, store *alertStore) {
+	r := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     []string{broker},
+		Topic:       "alerts",
+		GroupID:     "query-api",
+		StartOffset: kafka.LastOffset,
+	})
+	defer r.Close()
+	for {
+		m, err := r.ReadMessage(context.Background())
+		if err != nil {
+			log.Printf("alerts read: %v", err)
+			return
+		}
+		var al telemetrypb.Alert
+		if err := proto.Unmarshal(m.Value, &al); err != nil {
+			continue
+		}
+		store.add(&al)
+	}
 }
 
 func main() {
@@ -32,6 +82,7 @@ func main() {
 	redisAddr := getenv("REDIS_ADDR", "localhost:6380")
 	grpcAddr := getenv("GRPC_ADDR", ":9090")
 	httpAddr := getenv("HTTP_ADDR", ":8082")
+	broker := getenv("KAFKA_BROKERS", "localhost:9092")
 
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, dbURL)
@@ -43,8 +94,15 @@ func main() {
 		log.Fatalf("postgis extension: %v", err)
 	}
 
-	s := &server{rdb: redis.NewClient(&redis.Options{Addr: redisAddr}), pool: pool}
+	s := &server{
+		rdb:    redis.NewClient(&redis.Options{Addr: redisAddr}),
+		pool:   pool,
+		alerts: &alertStore{max: 100},
+	}
 	defer s.rdb.Close()
+
+	// Live alerts feed: consume the alerts topic into memory.
+	go consumeAlerts(broker, s.alerts)
 
 	// gRPC
 	go func() {
@@ -153,6 +211,14 @@ type carJSON struct {
 	MotorTemp  float64 `json:"motor_temp"`
 }
 
+type alertJSON struct {
+	CarID   string  `json:"car_id"`
+	Ts      int64   `json:"ts"`
+	Type    string  `json:"type"`
+	Message string  `json:"message"`
+	Value   float64 `json:"value"`
+}
+
 func toJSON(cars []*telemetrypb.Telemetry) []carJSON {
 	out := make([]carJSON, len(cars))
 	for i, c := range cars {
@@ -177,6 +243,17 @@ func (s *server) serveHTTP(addr string) {
 			return
 		}
 		writeCars(w, filter(cars, qf(r, "min_speed"), qf(r, "max_battery")), nil)
+	})
+
+	mux.HandleFunc("/api/alerts", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		als := s.alerts.list()
+		out := make([]alertJSON, len(als))
+		for i, a := range als {
+			out[i] = alertJSON{a.CarId, a.Ts, a.Type, a.Message, a.Value}
+		}
+		json.NewEncoder(w).Encode(out)
 	})
 
 	mux.HandleFunc("/api/geo", func(w http.ResponseWriter, r *http.Request) {

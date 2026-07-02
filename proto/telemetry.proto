@@ -47,3 +47,12 @@ message GeoQueryRequest {
 message Fleet {
   repeated Telemetry cars = 1;
 }
+
+// Alert is emitted to the `alerts` topic when an anomaly rule fires in ingest.
+message Alert {
+  string car_id = 1;
+  int64 ts = 2;
+  string type = 3;      // OVERHEAT | LOW_BATTERY | FAULT_CODE
+  string message = 4;
+  double value = 5;     // offending reading (temp °C / battery %)
+}

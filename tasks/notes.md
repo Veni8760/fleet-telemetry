@@ -49,3 +49,14 @@ Source of truth: `fleet-telemetry-design.md`. This file holds the proof each Gat
 - **Gate B — DuckDB aggregates over historical Parquet:**
   - 12 parquet files → `rows=120000 cars=9941`, speed avg=40.5/max=80.0, battery avg=49.7/min=0.0, plus top-5 by avg speed.
   - Verified no sink loss: controlled 50k burst with a single live consumer → exactly 5 files (10k/file).
+
+## Phase 4 — Stream Processing & Alerts ✅
+- proto: added `Alert{car_id, ts, type, message, value}`; new `alerts` topic (3 partitions).
+- ingest `detector`: rolling per-car state + rules — OVERHEAT (motor_temp>120), LOW_BATTERY (battery<15 for ≥5 consecutive readings), FAULT_CODE (any code present); 15s per-(car,type) cooldown; emits Alert protobuf to `alerts`.
+- query-api: consumes `alerts` into an in-memory ring (last 100), serves `GET /api/alerts`.
+- simulator: fault-injection control `POST :8090/inject?car=<id>` / `/clear` → that car emits motor_temp 130 + `OVERHEAT` fault code.
+- dashboard: shadcn Card "Live Alerts" feed (Badge per type: destructive/secondary), polls `/api/alerts`.
+- ops note: killed kafka-go consumers ghost their group (survives even kafka restart until session timeout), blocking offset reset. Fix applied: ingest `CONSUMER_GROUP` env + `StartOffset: LastOffset` so a fresh group consumes live (history stays in Postgres/Parquet).
+- **Gate — inject fault → alert live on dashboard:**
+  - `POST :8090/inject?car=car-3` → within ~1s `/api/alerts` shows `{car-3, OVERHEAT, "motor temp 130°C", 130}`.
+  - Playwright @ :3001: alerts panel lists `car-3 OVERHEAT` + `car-3 FAULT_CODE`, count badge = 28.

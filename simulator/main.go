@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"sync"
@@ -18,6 +19,28 @@ import (
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
+
+// faulty holds car_ids currently injected with an overheat fault (car_id -> true).
+var faulty sync.Map
+
+// serveControl exposes fault injection for the demo:
+//   curl -X POST 'localhost:8090/inject?car=car-3'   -> car-3 starts emitting OVERHEAT
+//   curl -X POST 'localhost:8090/clear?car=car-3'    -> back to normal
+func serveControl(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/inject", func(w http.ResponseWriter, r *http.Request) {
+		car := r.URL.Query().Get("car")
+		faulty.Store(car, true)
+		log.Printf("injected fault: %s", car)
+		w.Write([]byte("injected " + car))
+	})
+	mux.HandleFunc("/clear", func(w http.ResponseWriter, r *http.Request) {
+		faulty.Delete(r.URL.Query().Get("car"))
+		w.Write([]byte("cleared"))
+	})
+	log.Printf("simulator: fault-injection control on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
 
 func main() {
 	broker := getenv("KAFKA_BROKERS", "localhost:9092")
@@ -41,6 +64,8 @@ func main() {
 	defer w.Close()
 
 	log.Printf("simulator: fleet=%d rate=%.2fHz broker=%s", fleet, rateHz, broker)
+	go serveControl(getenv("SIM_ADDR", ":8090"))
+
 	var wg sync.WaitGroup
 	for i := 0; i < fleet; i++ {
 		wg.Add(1)
@@ -99,6 +124,12 @@ func (c *car) step(dt float64) {
 }
 
 func (c *car) telemetry() *telemetrypb.Telemetry {
+	motorTemp := 40 + c.speed*0.35 // normal: rises with speed
+	var faults []string
+	if _, ok := faulty.Load(c.id); ok {
+		motorTemp = 130 // injected overheat, above the 120°C alert threshold
+		faults = []string{"OVERHEAT"}
+	}
 	return &telemetrypb.Telemetry{
 		CarId:      c.id,
 		Ts:         time.Now().UnixMilli(),
@@ -107,9 +138,10 @@ func (c *car) telemetry() *telemetrypb.Telemetry {
 		Speed:      c.speed,
 		Heading:    c.heading,
 		BatteryPct: c.battery,
-		MotorTemp:  40 + c.speed*0.35, // rises with speed
+		MotorTemp:  motorTemp,
 		Odometer:   c.odo,
 		Gear:       "D",
+		FaultCodes: faults,
 	}
 }
 

@@ -347,6 +347,83 @@ func (x *Fleet) GetCars() []*Telemetry {
 	return nil
 }
 
+// Alert is emitted to the `alerts` topic when an anomaly rule fires in ingest.
+type Alert struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CarId         string                 `protobuf:"bytes,1,opt,name=car_id,json=carId,proto3" json:"car_id,omitempty"`
+	Ts            int64                  `protobuf:"varint,2,opt,name=ts,proto3" json:"ts,omitempty"`
+	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"` // OVERHEAT | LOW_BATTERY | FAULT_CODE
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Value         float64                `protobuf:"fixed64,5,opt,name=value,proto3" json:"value,omitempty"` // offending reading (temp °C / battery %)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Alert) Reset() {
+	*x = Alert{}
+	mi := &file_proto_telemetry_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Alert) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Alert) ProtoMessage() {}
+
+func (x *Alert) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_telemetry_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Alert.ProtoReflect.Descriptor instead.
+func (*Alert) Descriptor() ([]byte, []int) {
+	return file_proto_telemetry_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Alert) GetCarId() string {
+	if x != nil {
+		return x.CarId
+	}
+	return ""
+}
+
+func (x *Alert) GetTs() int64 {
+	if x != nil {
+		return x.Ts
+	}
+	return 0
+}
+
+func (x *Alert) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Alert) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *Alert) GetValue() float64 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
 var File_proto_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_telemetry_proto_rawDesc = "" +
@@ -379,7 +456,13 @@ const file_proto_telemetry_proto_rawDesc = "" +
 	"\amax_lat\x18\x03 \x01(\x01R\x06maxLat\x12\x17\n" +
 	"\amax_lng\x18\x04 \x01(\x01R\x06maxLng\"1\n" +
 	"\x05Fleet\x12(\n" +
-	"\x04cars\x18\x01 \x03(\v2\x14.telemetry.TelemetryR\x04cars2\xb6\x01\n" +
+	"\x04cars\x18\x01 \x03(\v2\x14.telemetry.TelemetryR\x04cars\"r\n" +
+	"\x05Alert\x12\x15\n" +
+	"\x06car_id\x18\x01 \x01(\tR\x05carId\x12\x0e\n" +
+	"\x02ts\x18\x02 \x01(\x03R\x02ts\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12\x14\n" +
+	"\x05value\x18\x05 \x01(\x01R\x05value2\xb6\x01\n" +
 	"\fFleetService\x128\n" +
 	"\bSnapshot\x12\x1a.telemetry.SnapshotRequest\x1a\x10.telemetry.Fleet\x122\n" +
 	"\x05Query\x12\x17.telemetry.QueryRequest\x1a\x10.telemetry.Fleet\x128\n" +
@@ -397,13 +480,14 @@ func file_proto_telemetry_proto_rawDescGZIP() []byte {
 	return file_proto_telemetry_proto_rawDescData
 }
 
-var file_proto_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_telemetry_proto_goTypes = []any{
 	(*Telemetry)(nil),       // 0: telemetry.Telemetry
 	(*SnapshotRequest)(nil), // 1: telemetry.SnapshotRequest
 	(*QueryRequest)(nil),    // 2: telemetry.QueryRequest
 	(*GeoQueryRequest)(nil), // 3: telemetry.GeoQueryRequest
 	(*Fleet)(nil),           // 4: telemetry.Fleet
+	(*Alert)(nil),           // 5: telemetry.Alert
 }
 var file_proto_telemetry_proto_depIdxs = []int32{
 	0, // 0: telemetry.Fleet.cars:type_name -> telemetry.Telemetry
@@ -431,7 +515,7 @@ func file_proto_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_telemetry_proto_rawDesc), len(file_proto_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

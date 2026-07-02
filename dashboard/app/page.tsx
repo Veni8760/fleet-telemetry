@@ -13,10 +13,18 @@ type Pos = {
   battery_pct: number;
 };
 
+type Alert = {
+  car_id: string;
+  ts: number;
+  type: string;
+  message: string;
+};
+
 const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8082";
 
 export default function Page() {
   const [count, setCount] = useState(0);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const mapEl = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,6 +65,8 @@ export default function Page() {
                 .addTo(map);
             }
           }
+          const ar = await fetch(`${API}/api/alerts`);
+          setAlerts(await ar.json());
         } catch {
           // API not up yet — retry next tick
         }
@@ -92,6 +102,39 @@ export default function Page() {
             </Badge>
             <span className="text-sm text-muted-foreground">cars live</span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card
+        data-testid="alerts-panel"
+        className="absolute right-4 top-4 z-[1000] flex max-h-[80vh] w-80 flex-col gap-2 py-4"
+      >
+        <CardHeader className="px-4">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            Live Alerts
+            <Badge variant={alerts.length ? "destructive" : "secondary"} data-testid="alert-count">
+              {alerts.length}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 overflow-y-auto px-4">
+          {alerts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No alerts.</p>
+          ) : (
+            <ul className="flex flex-col gap-2" data-testid="alert-list">
+              {alerts.map((a, i) => (
+                <li key={`${a.car_id}-${a.ts}-${i}`} className="flex flex-col gap-1 border-b pb-2 last:border-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant={a.type === "LOW_BATTERY" ? "secondary" : "destructive"}>
+                      {a.type}
+                    </Badge>
+                    <span className="font-mono text-xs text-muted-foreground">{a.car_id}</span>
+                  </div>
+                  <span className="text-xs">{a.message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </main>
