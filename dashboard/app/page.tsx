@@ -13,7 +13,7 @@ type Pos = {
   battery_pct: number;
 };
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8081";
+const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8082";
 
 export default function Page() {
   const [count, setCount] = useState(0);

@@ -7,8 +7,8 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phases 0–1 complete** — live fleet map over the full
-> simulator → Kafka → Postgres → Next.js loop.
+> **Status:** 🚧 Building. **Phases 0–2 complete** — 1,000-car live fleet with a
+> gRPC+REST query-api (Redis hot state, PostGIS geo queries) behind the Next.js map.
 > Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is
@@ -66,12 +66,16 @@ Full diagram, data shapes, and the rationale behind every choice: [design doc](.
 docker compose up -d
 
 # 2. Start the pipeline (each in its own terminal)
-go run ./ingest        # consume telemetry -> Postgres; serves /api/positions on :8081
-go run ./simulator     # FLEET_SIZE=10 cars random-walking -> Kafka (env: FLEET_SIZE, EMIT_RATE_HZ)
+go run ./ingest        # consume telemetry -> Postgres history + Redis hot state
+go run ./query-api     # REST :8082 + gRPC :9090 — snapshot/filter (Redis), geo (PostGIS)
+FLEET_SIZE=1000 go run ./simulator   # random-walking fleet -> Kafka (env: FLEET_SIZE, EMIT_RATE_HZ)
 
 # 3. Live map
 cd dashboard && npm install && npm run dev   # http://localhost:3001
 ```
+
+Query examples: `:8082/api/positions` · `:8082/api/query?min_speed=60&max_battery=15` ·
+`:8082/api/geo?min_lat=37.75&min_lng=-122.45&max_lat=37.80&max_lng=-122.40`.
 
 Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is committed).
 Host ports avoid a native Postgres (5432) and another local project (8080/3000); all are env-overridable.

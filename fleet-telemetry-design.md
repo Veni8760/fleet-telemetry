@@ -166,10 +166,10 @@ checkboxes below.
 - **Learn:** the full producer→broker→consumer→store→UI loop; why streaming exists.
 
 ### Phase 2 — Query the Fleet
-- [ ] query-api: gRPC + REST; current fleet snapshot from Redis; filtered queries (speed>X, battery<Y).
-- [ ] ingest-consumer also updates Redis hot state.
-- [ ] PostGIS on Postgres: geospatial queries ("cars in this bounding box / near this point").
-- [ ] dashboard reads live positions from the API; scale simulator toward ~1,000 cars (config knob).
+- [x] query-api: gRPC + REST; current fleet snapshot from Redis; filtered queries (speed>X, battery<Y).
+- [x] ingest-consumer also updates Redis hot state.
+- [x] PostGIS on Postgres: geospatial queries ("cars in this bounding box / near this point").
+- [x] dashboard reads live positions from the API; scale simulator toward ~1,000 cars (config knob).
 - **Gate:** a filter query ("cars >60 mph AND battery <15%") and a geo query ("cars in this box") return the correct sets; 1k cars run smoothly.
 - **Learn:** gRPC vs REST tradeoffs; hot vs cold state; geospatial querying; Kafka partitioning under load.
 

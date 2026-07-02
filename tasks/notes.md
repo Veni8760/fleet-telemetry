@@ -23,3 +23,16 @@ Source of truth: `fleet-telemetry-design.md`. This file holds the proof each Gat
   - Postgres: `select count(*),count(distinct car_id)` → `3680 | 10`.
   - `/api/positions` → HTTP 200 JSON, 10 cars.
   - Playwright @ localhost:3001: 10 `path.leaflet-interactive` markers, **all 10 changed `d` over 3.5s** (movement), badge reads `10`. Screenshot: `tasks/phase1-fleet-map.png`.
+
+## Phase 2 — Query the Fleet ✅
+- gRPC contract `FleetService` (Snapshot/Query/GeoQuery) in `proto/telemetry.proto`.
+- ingest now also writes Redis hot state: hash `fleet:latest` field=car_id value=raw protobuf bytes (reuses Kafka payload, no re-marshal). Dropped ingest's HTTP server — query-api owns reads.
+- query-api (`:8082` REST, `:9090` gRPC): snapshot + speed/battery filter from Redis; bbox geo via **PostGIS** (`ST_MakeEnvelope`/`ST_Contains` over `DISTINCT ON (car_id)` latest). Dashboard repointed to `:8082`.
+- **Gate — filter + geo return correct sets; 1k smooth (all verified at FLEET_SIZE=1000):**
+  - Smoothness: `/api/positions` ~30ms; hot-state age median 0.7s / max 1.7s → ingest keeps up at 1000 msg/s.
+  - Filter (data frozen, exact set compare vs recomputed-from-snapshot):
+    - `speed>=60 AND battery<=15` (gate) → 0==0 (batteries not yet drained; correct empty).
+    - `speed>=60` → 31==31 · `battery<=80` → 507==507 · `speed>=30 AND battery<=85` → 224==224. All exact set match, all satisfy predicate.
+  - Geo bbox (central SF) → PostGIS 417 == snapshot-bbox 417, all inside box.
+  - gRPC (`tools/grpcprobe`): Snapshot=1000, Query(60)=31, GeoQuery=417 — identical to REST.
+  - Dashboard: 1000 Leaflet markers, badge `1000`, 802 moved over 3.5s. Screenshot: `tasks/phase2-1k-fleet.png` (Playwright out dir).

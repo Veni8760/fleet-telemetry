@@ -1,18 +1,17 @@
 // ingest consumes the telemetry topic, persists history to Postgres (idempotent on
-// (car_id, ts)), and serves latest positions over HTTP for the dashboard.
-// Phase 2 adds Redis hot state; Phase 4 adds anomaly rules -> alerts topic.
+// (car_id, ts)), and updates Redis hot state (fleet:latest hash, raw protobuf bytes
+// per car). query-api owns all reads. Phase 4 adds anomaly rules -> alerts topic.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
-	"net/http"
 	"os"
 
 	telemetrypb "fleet-telemetry/proto/gen"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
@@ -40,10 +39,13 @@ INSERT INTO telemetry
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 ON CONFLICT (car_id, ts) DO NOTHING`
 
+// hotKey is the Redis hash of latest telemetry per car (field=car_id, value=protobuf bytes).
+const hotKey = "fleet:latest"
+
 func main() {
 	broker := getenv("KAFKA_BROKERS", "localhost:9092")
 	dbURL := getenv("DATABASE_URL", "postgres://fleet:fleet@localhost:5433/fleet")
-	httpAddr := getenv("HTTP_ADDR", ":8081")
+	redisAddr := getenv("REDIS_ADDR", "localhost:6380")
 
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, dbURL)
@@ -55,7 +57,8 @@ func main() {
 		log.Fatalf("schema: %v", err)
 	}
 
-	go serveHTTP(pool, httpAddr)
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	defer rdb.Close()
 
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{broker},
@@ -64,7 +67,7 @@ func main() {
 	})
 	defer r.Close()
 
-	log.Printf("ingest: consuming topic=telemetry group=ingest broker=%s http=%s", broker, httpAddr)
+	log.Printf("ingest: consuming topic=telemetry group=ingest broker=%s pg=ok redis=%s", broker, redisAddr)
 	for {
 		m, err := r.ReadMessage(ctx)
 		if err != nil {
@@ -80,52 +83,11 @@ func main() {
 			t.BatteryPct, t.MotorTemp, t.Odometer, t.Gear, t.FaultCodes); err != nil {
 			log.Printf("insert %s: %v", t.CarId, err)
 		}
+		// Hot state: store the raw Kafka bytes (already protobuf) keyed by car_id.
+		if err := rdb.HSet(ctx, hotKey, t.CarId, m.Value).Err(); err != nil {
+			log.Printf("redis hset %s: %v", t.CarId, err)
+		}
 	}
-}
-
-type position struct {
-	CarID      string  `json:"car_id"`
-	Ts         int64   `json:"ts"`
-	Lat        float64 `json:"lat"`
-	Lng        float64 `json:"lng"`
-	Speed      float64 `json:"speed"`
-	Heading    float64 `json:"heading"`
-	BatteryPct float64 `json:"battery_pct"`
-	MotorTemp  float64 `json:"motor_temp"`
-}
-
-const latestSQL = `
-SELECT DISTINCT ON (car_id) car_id, ts, lat, lng, speed, heading, battery_pct, motor_temp
-FROM telemetry
-ORDER BY car_id, ts DESC`
-
-func serveHTTP(pool *pgxpool.Pool, addr string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte("ok"))
-	})
-	mux.HandleFunc("/api/positions", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		rows, err := pool.Query(r.Context(), latestSQL)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
-		out := []position{}
-		for rows.Next() {
-			var p position
-			if err := rows.Scan(&p.CarID, &p.Ts, &p.Lat, &p.Lng, &p.Speed, &p.Heading, &p.BatteryPct, &p.MotorTemp); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			out = append(out, p)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(out)
-	})
-	log.Printf("http listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
 func getenv(k, def string) string {

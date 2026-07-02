@@ -4,7 +4,7 @@ package telemetry;
 
 option go_package = "fleet-telemetry/proto/gen;telemetrypb";
 
-// Telemetry is the single event shape used on Kafka and (later) the gRPC contract.
+// Telemetry is the single event shape used on Kafka and the gRPC contract.
 message Telemetry {
   string car_id = 1;
   int64 ts = 2;            // unix milliseconds
@@ -17,4 +17,33 @@ message Telemetry {
   double odometer = 9;     // miles
   string gear = 10;        // P/R/N/D
   repeated string fault_codes = 11;
+}
+
+// FleetService is the query-api contract (also exposed as REST + SSE for browsers).
+service FleetService {
+  // Snapshot returns the latest telemetry for every car (Redis hot state).
+  rpc Snapshot(SnapshotRequest) returns (Fleet);
+  // Query filters the hot state by speed/battery thresholds.
+  rpc Query(QueryRequest) returns (Fleet);
+  // GeoQuery returns cars whose latest position falls inside a bounding box (PostGIS).
+  rpc GeoQuery(GeoQueryRequest) returns (Fleet);
+}
+
+message SnapshotRequest {}
+
+// Zero value means "unset": min_speed=0 keeps all, max_battery=0 means no upper bound.
+message QueryRequest {
+  double min_speed = 1;    // keep cars with speed >= min_speed
+  double max_battery = 2;  // keep cars with battery_pct <= max_battery (0 = no limit)
+}
+
+message GeoQueryRequest {
+  double min_lat = 1;
+  double min_lng = 2;
+  double max_lat = 3;
+  double max_lng = 4;
+}
+
+message Fleet {
+  repeated Telemetry cars = 1;
 }

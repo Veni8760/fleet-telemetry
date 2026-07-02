@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Telemetry is the single event shape used on Kafka and (later) the gRPC contract.
+// Telemetry is the single event shape used on Kafka and the gRPC contract.
 type Telemetry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	CarId         string                 `protobuf:"bytes,1,opt,name=car_id,json=carId,proto3" json:"car_id,omitempty"`
@@ -146,6 +146,207 @@ func (x *Telemetry) GetFaultCodes() []string {
 	return nil
 }
 
+type SnapshotRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SnapshotRequest) Reset() {
+	*x = SnapshotRequest{}
+	mi := &file_proto_telemetry_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SnapshotRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SnapshotRequest) ProtoMessage() {}
+
+func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_telemetry_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SnapshotRequest.ProtoReflect.Descriptor instead.
+func (*SnapshotRequest) Descriptor() ([]byte, []int) {
+	return file_proto_telemetry_proto_rawDescGZIP(), []int{1}
+}
+
+// Zero value means "unset": min_speed=0 keeps all, max_battery=0 means no upper bound.
+type QueryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MinSpeed      float64                `protobuf:"fixed64,1,opt,name=min_speed,json=minSpeed,proto3" json:"min_speed,omitempty"`       // keep cars with speed >= min_speed
+	MaxBattery    float64                `protobuf:"fixed64,2,opt,name=max_battery,json=maxBattery,proto3" json:"max_battery,omitempty"` // keep cars with battery_pct <= max_battery (0 = no limit)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryRequest) Reset() {
+	*x = QueryRequest{}
+	mi := &file_proto_telemetry_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryRequest) ProtoMessage() {}
+
+func (x *QueryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_telemetry_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
+func (*QueryRequest) Descriptor() ([]byte, []int) {
+	return file_proto_telemetry_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *QueryRequest) GetMinSpeed() float64 {
+	if x != nil {
+		return x.MinSpeed
+	}
+	return 0
+}
+
+func (x *QueryRequest) GetMaxBattery() float64 {
+	if x != nil {
+		return x.MaxBattery
+	}
+	return 0
+}
+
+type GeoQueryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MinLat        float64                `protobuf:"fixed64,1,opt,name=min_lat,json=minLat,proto3" json:"min_lat,omitempty"`
+	MinLng        float64                `protobuf:"fixed64,2,opt,name=min_lng,json=minLng,proto3" json:"min_lng,omitempty"`
+	MaxLat        float64                `protobuf:"fixed64,3,opt,name=max_lat,json=maxLat,proto3" json:"max_lat,omitempty"`
+	MaxLng        float64                `protobuf:"fixed64,4,opt,name=max_lng,json=maxLng,proto3" json:"max_lng,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GeoQueryRequest) Reset() {
+	*x = GeoQueryRequest{}
+	mi := &file_proto_telemetry_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GeoQueryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GeoQueryRequest) ProtoMessage() {}
+
+func (x *GeoQueryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_telemetry_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GeoQueryRequest.ProtoReflect.Descriptor instead.
+func (*GeoQueryRequest) Descriptor() ([]byte, []int) {
+	return file_proto_telemetry_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GeoQueryRequest) GetMinLat() float64 {
+	if x != nil {
+		return x.MinLat
+	}
+	return 0
+}
+
+func (x *GeoQueryRequest) GetMinLng() float64 {
+	if x != nil {
+		return x.MinLng
+	}
+	return 0
+}
+
+func (x *GeoQueryRequest) GetMaxLat() float64 {
+	if x != nil {
+		return x.MaxLat
+	}
+	return 0
+}
+
+func (x *GeoQueryRequest) GetMaxLng() float64 {
+	if x != nil {
+		return x.MaxLng
+	}
+	return 0
+}
+
+type Fleet struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cars          []*Telemetry           `protobuf:"bytes,1,rep,name=cars,proto3" json:"cars,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Fleet) Reset() {
+	*x = Fleet{}
+	mi := &file_proto_telemetry_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Fleet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Fleet) ProtoMessage() {}
+
+func (x *Fleet) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_telemetry_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Fleet.ProtoReflect.Descriptor instead.
+func (*Fleet) Descriptor() ([]byte, []int) {
+	return file_proto_telemetry_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Fleet) GetCars() []*Telemetry {
+	if x != nil {
+		return x.Cars
+	}
+	return nil
+}
+
 var File_proto_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_telemetry_proto_rawDesc = "" +
@@ -166,7 +367,23 @@ const file_proto_telemetry_proto_rawDesc = "" +
 	"\x04gear\x18\n" +
 	" \x01(\tR\x04gear\x12\x1f\n" +
 	"\vfault_codes\x18\v \x03(\tR\n" +
-	"faultCodesB'Z%fleet-telemetry/proto/gen;telemetrypbb\x06proto3"
+	"faultCodes\"\x11\n" +
+	"\x0fSnapshotRequest\"L\n" +
+	"\fQueryRequest\x12\x1b\n" +
+	"\tmin_speed\x18\x01 \x01(\x01R\bminSpeed\x12\x1f\n" +
+	"\vmax_battery\x18\x02 \x01(\x01R\n" +
+	"maxBattery\"u\n" +
+	"\x0fGeoQueryRequest\x12\x17\n" +
+	"\amin_lat\x18\x01 \x01(\x01R\x06minLat\x12\x17\n" +
+	"\amin_lng\x18\x02 \x01(\x01R\x06minLng\x12\x17\n" +
+	"\amax_lat\x18\x03 \x01(\x01R\x06maxLat\x12\x17\n" +
+	"\amax_lng\x18\x04 \x01(\x01R\x06maxLng\"1\n" +
+	"\x05Fleet\x12(\n" +
+	"\x04cars\x18\x01 \x03(\v2\x14.telemetry.TelemetryR\x04cars2\xb6\x01\n" +
+	"\fFleetService\x128\n" +
+	"\bSnapshot\x12\x1a.telemetry.SnapshotRequest\x1a\x10.telemetry.Fleet\x122\n" +
+	"\x05Query\x12\x17.telemetry.QueryRequest\x1a\x10.telemetry.Fleet\x128\n" +
+	"\bGeoQuery\x12\x1a.telemetry.GeoQueryRequest\x1a\x10.telemetry.FleetB'Z%fleet-telemetry/proto/gen;telemetrypbb\x06proto3"
 
 var (
 	file_proto_telemetry_proto_rawDescOnce sync.Once
@@ -180,16 +397,27 @@ func file_proto_telemetry_proto_rawDescGZIP() []byte {
 	return file_proto_telemetry_proto_rawDescData
 }
 
-var file_proto_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_proto_telemetry_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_telemetry_proto_goTypes = []any{
-	(*Telemetry)(nil), // 0: telemetry.Telemetry
+	(*Telemetry)(nil),       // 0: telemetry.Telemetry
+	(*SnapshotRequest)(nil), // 1: telemetry.SnapshotRequest
+	(*QueryRequest)(nil),    // 2: telemetry.QueryRequest
+	(*GeoQueryRequest)(nil), // 3: telemetry.GeoQueryRequest
+	(*Fleet)(nil),           // 4: telemetry.Fleet
 }
 var file_proto_telemetry_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: telemetry.Fleet.cars:type_name -> telemetry.Telemetry
+	1, // 1: telemetry.FleetService.Snapshot:input_type -> telemetry.SnapshotRequest
+	2, // 2: telemetry.FleetService.Query:input_type -> telemetry.QueryRequest
+	3, // 3: telemetry.FleetService.GeoQuery:input_type -> telemetry.GeoQueryRequest
+	4, // 4: telemetry.FleetService.Snapshot:output_type -> telemetry.Fleet
+	4, // 5: telemetry.FleetService.Query:output_type -> telemetry.Fleet
+	4, // 6: telemetry.FleetService.GeoQuery:output_type -> telemetry.Fleet
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_telemetry_proto_init() }
@@ -203,9 +431,9 @@ func file_proto_telemetry_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_telemetry_proto_rawDesc), len(file_proto_telemetry_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   5,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_proto_telemetry_proto_goTypes,
 		DependencyIndexes: file_proto_telemetry_proto_depIdxs,
