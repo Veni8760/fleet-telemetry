@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fleet
+---
+# Non-secret wiring: in-cluster service DNS. Every app reads these via envFrom.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fleet-config
+  namespace: fleet
+data:
+  KAFKA_BROKERS: kafka:9092
+  REDIS_ADDR: redis:6379
+  POSTGRES_USER: fleet
+  POSTGRES_DB: fleet
+---
+# Postgres creds. DATABASE_URL carries the password, so it lives here (not the ConfigMap).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fleet-secret
+  namespace: fleet
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: fleet
+  DATABASE_URL: postgres://fleet:fleet@postgres:5432/fleet

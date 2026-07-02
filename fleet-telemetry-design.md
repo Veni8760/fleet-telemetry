@@ -199,8 +199,8 @@ checkboxes below.
 - **Learn:** server-push transports; building a real-time frontend over a stream.
 
 ### Phase 7 — Kubernetes
-- [ ] k8s manifests (Deployments, Services, ConfigMaps/Secrets) for the whole stack.
-- [ ] deploy to local **kind**; document the demo runbook.
+- [x] k8s manifests (Deployments, Services, ConfigMaps/Secrets) for the whole stack.
+- [x] deploy to local **kind**; document the demo runbook.
 - **Gate:** `kubectl get pods` all green; the full demo works in-cluster.
 - **Learn:** containerization → orchestration; k8s primitives; config/secret management.
 

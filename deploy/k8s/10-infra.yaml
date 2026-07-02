@@ -1,0 +1,96 @@
+# Infra: single-node Kafka (KRaft), Postgres+PostGIS, Redis.
+# ponytail: emptyDir everywhere — this is an ephemeral demo cluster; ingest recreates the
+# schema on boot and Kafka/Redis state is disposable. Add PVCs if you need it to survive restarts.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kafka } }
+  template:
+    metadata: { labels: { app: kafka } }
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.0
+          ports: [{ containerPort: 9092 }]
+          env:
+            - { name: KAFKA_NODE_ID, value: "1" }
+            - { name: KAFKA_PROCESS_ROLES, value: "broker,controller" }
+            # Single in-cluster listener advertised as the Service DNS name.
+            - { name: KAFKA_LISTENERS, value: "CONTROLLER://:9093,PLAINTEXT://:9092" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka:9092" }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" }
+            - { name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093" }
+            - { name: KAFKA_CONTROLLER_LISTENER_NAMES, value: "CONTROLLER" }
+            - { name: KAFKA_INTER_BROKER_LISTENER_NAME, value: "PLAINTEXT" }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: "0" }
+          volumeMounts: [{ name: data, mountPath: /var/lib/kafka/data }]
+      volumes: [{ name: data, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kafka, namespace: fleet }
+spec:
+  selector: { app: kafka }
+  ports: [{ port: 9092, targetPort: 9092 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgis/postgis:16-3.4
+          ports: [{ containerPort: 5432 }]
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { configMapKeyRef: { name: fleet-config, key: POSTGRES_USER } }
+            - name: POSTGRES_DB
+              valueFrom: { configMapKeyRef: { name: fleet-config, key: POSTGRES_DB } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: fleet-secret, key: POSTGRES_PASSWORD } }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+      volumes: [{ name: data, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: postgres, namespace: fleet }
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports: [{ containerPort: 6379 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: redis, namespace: fleet }
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]

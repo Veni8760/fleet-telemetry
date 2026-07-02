@@ -11,19 +11,13 @@ Source of truth: `fleet-telemetry-design.md`. Gate evidence: `tasks/notes.md`.
 - [x] **Phase 5 — Observability** — Prometheus /metrics on every service, kafka-exporter, Grafana dashboard, lag alert rule.
 - [x] **Phase 6 — Live Dashboard Polish** — SSE (no polling) + battery/speed charts (shadcn/Recharts).
 
-## TODO — resume here tomorrow
+- [x] **Phase 7 — Kubernetes (local kind)** — 4 images (1 multi-stage Go + Next.js standalone), manifests in `deploy/k8s/` (Namespace/ConfigMap/Secret, Kafka/Postgres/Redis infra, 4 app Deployments), `kind` cluster. **Gate passed:** all 7 pods green; in-cluster demo = 200 cars on live map + injected OVERHEAT alerts + charts (`tasks/phase7-k8s-dashboard.png`). Runbook in README.
 
-### Phase 7 — Kubernetes (local kind)  ← START HERE
-- [ ] Dockerfiles: one multi-stage Go image (build arg SERVICE) for simulator/ingest/query-api (all pure Go, CGO off); Next.js image for dashboard (build with `NEXT_PUBLIC_API_BASE=http://localhost:8082`).
-- [ ] k8s manifests in `deploy/k8s/`: Namespace; **ConfigMap** (KAFKA_BROKERS=kafka:9092, DATABASE_URL, REDIS_ADDR); **Secret** (postgres creds); Deployments+Services for kafka (KRaft), postgres (postgis), redis, ingest, query-api, simulator, dashboard.
-- [ ] `kind create cluster`; `kind load docker-image` for the 4 app images; `kubectl apply -f deploy/k8s/`.
-- [ ] Demo runbook in README (port-forward query-api :8082 and dashboard :3001).
-- **Gate:** `kubectl get pods` all green; full demo works in-cluster (port-forward → map shows moving cars + alerts + charts).
-- Optional/stretch: also run prometheus/grafana/kafka-exporter in-cluster (already proven in compose; not required by the gate).
+## All phases complete 🎉
 
-### Setup already done for Phase 7
-- `kind v0.32.0` installed via `go install sigs.k8s.io/kind@latest` (binary at `$(go env GOPATH)/bin/kind`; add that to PATH).
-- `kubectl v1.34.1` present. Docker running.
+Nothing left in the core roadmap. Optional stretch ideas (not required by any gate):
+- Observability in-cluster (prometheus/grafana/kafka-exporter) — already proven in compose.
+- MCP natural-language fleet queries · Java/Spring query-api variant · Python ML anomaly · cloud k8s.
 
 ## Environment notes (important for resume)
 - **Local host ports remapped** (a native Postgres owns 5432; another project owns 8080/3000):

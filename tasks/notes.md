@@ -79,3 +79,15 @@ Source of truth: `fleet-telemetry-design.md`. This file holds the proof each Gat
 - **Gate — real-time push (no polling) + charts reflect live state:**
   - Playwright @ :3001: 200 markers, **165 moved in 4s**, badge=200; **0** requests to `/api/positions`/`/api/alerts` (polling gone); 26 chart bars rendered.
   - Server confirms: `queryapi_requests_total{endpoint="stream"}=1` (browser SSE connection), `positions`=none. Screenshot: `tasks/phase6-sse-charts.png`.
+
+## Phase 7 — Kubernetes (local kind) ✅
+- Images: one multi-stage `Dockerfile` (build arg `SERVICE`, `CGO_ENABLED=0`, distroless/static) → `fleet/{simulator,ingest,query-api}:local`; `dashboard/Dockerfile` (Next.js `output:'standalone'`, `NEXT_PUBLIC_API_BASE=http://localhost:8082` baked) → `fleet/dashboard:local`.
+- Manifests `deploy/k8s/`: `00-config.yaml` (Namespace `fleet`, ConfigMap `fleet-config` = KAFKA_BROKERS/REDIS_ADDR/POSTGRES_*, Secret `fleet-secret` = POSTGRES_PASSWORD + DATABASE_URL); `10-infra.yaml` (kafka KRaft single-node advertising `kafka:9092`, postgis, redis; emptyDir); `20-apps.yaml` (ingest/query-api/simulator/dashboard; apps use `envFrom` config+secret).
+- Deploy: `kind create cluster --name fleet` → `kind load docker-image` ×4 → `kubectl apply -f deploy/k8s/`.
+- **Gate — `kubectl get pods` all green + full demo in-cluster:**
+  - All 7 pods Running. ingest/query-api/simulator each restarted ~2× (CrashLoopBackOff while kafka/pg warmed up) then settled — self-healing ordering, no init-containers needed.
+  - Pipeline: port-forward `svc/query-api` → `/api/positions` = **200 cars** streaming kafka→ingest→redis→query-api in-cluster.
+  - Alerts: port-forward `deploy/simulator` :8090, `POST /inject?car=car-47` → `/api/alerts` shows `{car-47, OVERHEAT/FAULT_CODE}` within ~1s (alerts topic works in-cluster).
+  - Dashboard: port-forward `svc/dashboard` :3001 → Playwright shows 200 markers on the live SF map, Live Alerts panel (car-99/car-47 OVERHEAT+FAULT_CODE), battery/speed histograms. Screenshot: `tasks/phase7-k8s-dashboard.png`.
+- **Gotcha — Next.js standalone bind:** `server.js` binds to `$HOSTNAME`; k8s sets that to the pod name so it never listened on 0.0.0.0 and port-forward was refused. Fix: `HOSTNAME=0.0.0.0` env on the dashboard container.
+- **Gotcha — unquoted `:local` tag:** a shell hook stripped `:l` from unquoted `docker build -t fleet/x:local` / `kind load ... fleet/x:local`, producing `fleet/xocal:latest`. Quote image refs (`"fleet/x:local"`) in build/load commands.

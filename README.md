@@ -7,9 +7,9 @@ A portfolio flagship for distributed-systems / streaming / cloud-native backend 
 around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
 necessary* rather than bolted on.
 
-> **Status:** 🚧 Building. **Phases 0–6 complete** — real-time SSE dashboard (live map,
-> battery/speed charts, alerts feed) over the full streaming + observability stack. Only k8s (Phase 7) remains.
-> Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
+> **Status:** ✅ **Phases 0–7 complete** — the full streaming + observability stack, real-time SSE
+> dashboard (live map, battery/speed charts, alerts feed), deployed to a local **Kubernetes (kind)**
+> cluster. Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
 
 ## What it is
 
@@ -102,6 +102,38 @@ curl -X POST 'localhost:8090/clear?car=car-3'      # back to normal
 
 Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is committed).
 Host ports avoid a native Postgres (5432) and another local project (8080/3000); all are env-overridable.
+
+## Kubernetes (Phase 7 — local kind)
+
+The whole stack also runs in a local Kubernetes cluster. Images are built locally and loaded
+into [kind](https://kind.sigs.k8s.io/) — no registry needed.
+
+```bash
+# 1. Build the four app images (quote the :local tag)
+docker build --build-arg SERVICE=simulator  -t "fleet/simulator:local"  .
+docker build --build-arg SERVICE=ingest     -t "fleet/ingest:local"     .
+docker build --build-arg SERVICE=query-api  -t "fleet/query-api:local"  .
+docker build -t "fleet/dashboard:local" dashboard/
+
+# 2. Cluster + load images + apply manifests
+kind create cluster --name fleet
+for i in simulator ingest query-api dashboard; do kind load docker-image "fleet/$i:local" --name fleet; done
+kubectl apply -f deploy/k8s/
+kubectl get pods -n fleet -w        # wait for all 7 Running (app pods CrashLoop until infra is up, then settle)
+
+# 3. Demo: port-forward the API and the dashboard
+kubectl port-forward -n fleet svc/query-api 8082:8082 &
+kubectl port-forward -n fleet svc/dashboard 3001:3000 &
+open http://localhost:3001         # live map + alerts + charts, streamed over SSE
+
+# inject a fault (simulator control) and watch the alert appear live:
+kubectl port-forward -n fleet deploy/simulator 8090:8090 &
+curl -X POST 'localhost:8090/inject?car=car-42'
+```
+
+Manifests: `deploy/k8s/00-config.yaml` (Namespace + ConfigMap + Secret), `10-infra.yaml`
+(Kafka KRaft / Postgres+PostGIS / Redis), `20-apps.yaml` (ingest / query-api / simulator / dashboard).
+Teardown: `kind delete cluster --name fleet`.
 
 ## How it's built
 

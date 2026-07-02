@@ -1,0 +1,99 @@
+# App tier. Each pulls the locally-built image (kind load docker-image ...); IfNotPresent so
+# k8s never tries a registry. All read wiring via envFrom (config + secret).
+# ponytail: no init-containers / readiness gating — kafka & pg clients log.Fatal on a cold
+# dependency, so the pod just CrashLoopBackOffs until infra is up, then stays. Self-healing ordering.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ingest } }
+  template:
+    metadata: { labels: { app: ingest } }
+    spec:
+      containers:
+        - name: ingest
+          image: fleet/ingest:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: fleet-config }
+            - secretRef: { name: fleet-secret }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: query-api
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: query-api } }
+  template:
+    metadata: { labels: { app: query-api } }
+    spec:
+      containers:
+        - name: query-api
+          image: fleet/query-api:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8082 }, { containerPort: 9090 }]
+          envFrom:
+            - configMapRef: { name: fleet-config }
+            - secretRef: { name: fleet-secret }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: query-api, namespace: fleet }
+spec:
+  selector: { app: query-api }
+  ports:
+    - { name: rest, port: 8082, targetPort: 8082 }
+    - { name: grpc, port: 9090, targetPort: 9090 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simulator
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: simulator } }
+  template:
+    metadata: { labels: { app: simulator } }
+    spec:
+      containers:
+        - name: simulator
+          image: fleet/simulator:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: FLEET_SIZE, value: "200" }
+          envFrom:
+            - configMapRef: { name: fleet-config }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: fleet
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: dashboard } }
+  template:
+    metadata: { labels: { app: dashboard } }
+    spec:
+      containers:
+        - name: dashboard
+          image: fleet/dashboard:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3000 }]
+          # Next.js standalone server.js binds to $HOSTNAME; k8s sets that to the pod name,
+          # so without this it never listens on 0.0.0.0 and port-forward is refused.
+          env:
+            - { name: HOSTNAME, value: "0.0.0.0" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: dashboard, namespace: fleet }
+spec:
+  selector: { app: dashboard }
+  ports: [{ port: 3000, targetPort: 3000 }]
