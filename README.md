@@ -1,22 +1,8 @@
 # Fleet Telemetry Platform
 
-Simulated EV / robotaxi fleet streaming live telemetry to a cloud-native backend that
-**ingests, processes, stores, queries, visualizes, and alerts** in real time.
-
-A portfolio flagship for distributed-systems / streaming / cloud-native backend work — built
-around the rare problem domain where Kafka, stream processing, and Kubernetes are *genuinely
-necessary* rather than bolted on.
-
-> **Status:** ✅ **Phases 0–7 complete** — the full streaming + observability stack, real-time SSE
-> dashboard (live map, battery/speed charts, alerts feed), deployed to a local **Kubernetes (kind)**
-> cluster. Full architecture, decisions, and phasing live in the [design doc](./fleet-telemetry-design.md).
-
-## What it is
-
-A device simulator spins up thousands of virtual cars (GPS, speed, battery %, motor temp, fault
-codes) that stream telemetry through Kafka into a Go processing pipeline, time-series + hot
-storage, and a live Next.js dashboard — with full Prometheus/Grafana observability, deployed to
-Kubernetes.
+A simulated EV fleet streaming live telemetry through Kafka into a Go pipeline, time-series +
+hot storage, and a live Next.js dashboard — with Prometheus/Grafana observability, runnable on
+Docker Compose or a local Kubernetes cluster.
 
 ## Architecture
 
@@ -30,8 +16,6 @@ simulator (Go) → Kafka → ingest-consumer (Go) → Postgres + Redis
   + Prometheus/Grafana observability   ·   Docker Compose (dev) → Kubernetes/kind (deploy)
 ```
 
-Full diagram, data shapes, and the rationale behind every choice: [design doc](./fleet-telemetry-design.md).
-
 ## Tech stack
 
 | Layer | Choice |
@@ -43,10 +27,6 @@ Full diagram, data shapes, and the rationale behind every choice: [design doc](.
 | Frontend | **Next.js / TypeScript** (live map + charts) |
 | Observability | **Prometheus + Grafana** (+ kafka-exporter for consumer lag) |
 | Infra | **Docker Compose** (dev) → **Kubernetes / kind** (deploy) |
-
-Observability (Phase 5): Prometheus at `localhost:9091`, Grafana at `localhost:3002`
-(anonymous, dashboard "Fleet Telemetry Pipeline"). Go services expose `/metrics`
-(ingest `:2112`, simulator `:8090`, query-api `:8082`).
 
 ## Quickstart
 
@@ -66,7 +46,14 @@ cd dashboard && npm install && npm run dev   # http://localhost:3001
 Query examples: `:8082/api/positions` · `:8082/api/query?min_speed=60&max_battery=15` ·
 `:8082/api/geo?min_lat=37.75&min_lng=-122.45&max_lat=37.80&max_lng=-122.40`.
 
-Scale & analytics (Phase 3):
+Observability: Prometheus at `localhost:9091`, Grafana at `localhost:3002` (anonymous). Go
+services expose `/metrics` (ingest `:2112`, simulator `:8090`, query-api `:8082`).
+
+Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is
+committed). Host ports avoid a native Postgres (5432) and another local project (8080/3000); all
+are env-overridable.
+
+### Scale & analytics
 
 ```bash
 # Run several consumers in one group (watch partitions rebalance):
@@ -77,18 +64,17 @@ docker exec fleet-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 go run ./analytics                                 # embedded DuckDB rollups over Parquet
 ```
 
-Live alerts (Phase 4): with `ingest`, `query-api`, `simulator`, and the dashboard running,
-inject a fault and watch it appear on the map's alerts panel:
+### Live alerts
+
+With `ingest`, `query-api`, `simulator`, and the dashboard running, inject a fault and watch it
+appear on the map's alerts panel:
 
 ```bash
 curl -X POST 'localhost:8090/inject?car=car-3'     # car-3 overheats -> OVERHEAT alert live
 curl -X POST 'localhost:8090/clear?car=car-3'      # back to normal
 ```
 
-Requires Go 1.26+, Node 20+, Docker. `protoc` only if regenerating `/proto` (generated Go is committed).
-Host ports avoid a native Postgres (5432) and another local project (8080/3000); all are env-overridable.
-
-## Kubernetes (Phase 7 — local kind)
+## Kubernetes (local kind)
 
 The whole stack also runs in a local Kubernetes cluster. Images are built locally and loaded
 into [kind](https://kind.sigs.k8s.io/) — no registry needed.
@@ -120,13 +106,6 @@ Manifests: `deploy/k8s/00-config.yaml` (Namespace + ConfigMap + Secret), `10-inf
 (Kafka KRaft / Postgres+PostGIS / Redis), `20-apps.yaml` (ingest / query-api / simulator / dashboard).
 Teardown: `kind delete cluster --name fleet`.
 
-## How it's built
-
-Each phase is a complete **vertical slice** with a "prove it works" gate — built in order, no
-phase starts until the previous one's gate passes. Gate evidence is tracked in
-[`tasks/notes.md`](./tasks/notes.md).
-
 ## Docs
 
-- [Design doc](./fleet-telemetry-design.md) — architecture, locked decisions, phasing
-- [Project handoff](./fleet-telemetry-handoff.md) — origin & context
+- [Design doc](./fleet-telemetry-design.md) — architecture, decisions, data shapes
