@@ -48,21 +48,6 @@ Observability (Phase 5): Prometheus at `localhost:9091`, Grafana at `localhost:3
 (anonymous, dashboard "Fleet Telemetry Pipeline"). Go services expose `/metrics`
 (ingest `:2112`, simulator `:8090`, query-api `:8082`).
 
-## Roadmap (epics)
-
-| Phase | Epic | Outcome |
-|---|---|---|
-| 0 | Foundations | Repo, Docker Compose (Kafka/Postgres/Redis), Go produce↔consume round-trip |
-| 1 | End-to-end telemetry | simulator → Kafka → Postgres → live map |
-| 2 | Fleet query API | gRPC+REST, Redis hot state, filtered queries, scale to ~1k cars |
-| 3 | Scale & analytics | consumer-group scaling, 10k-car loadgen, DuckDB/Parquet rollups |
-| 4 | Stream processing | rolling aggregates + live anomaly alerts |
-| 5 | Observability | Prometheus metrics + Grafana dashboards |
-| 6 | Real-time UX | SSE live map + charts |
-| 7 | Cloud-native deploy | Kubernetes (kind) |
-
-**Stretch:** MCP natural-language fleet queries · Java/Spring query-api variant · Python ML anomaly · cloud k8s.
-
 ## Quickstart
 
 ```bash
